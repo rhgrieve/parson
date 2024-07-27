@@ -1,3 +1,12 @@
+# Parson
+
+Parson is a simple CLI library made for myself. Inspired a bit by clap and a bit by Commander.js.
+
+If you decide to use it that's cool but it comes with no guarantees.
+
+## Usage
+
+```rust
 use parson::{Argument, Command, Opt};
 
 fn main() {
@@ -23,3 +32,10 @@ fn main() {
         })
         .run();
 }
+```
+
+### Result
+```sh
+> namesay John --last-name=Doe --shout
+HELLO, JOHN DOE!
+```

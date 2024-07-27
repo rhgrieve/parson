@@ -4,16 +4,6 @@ use tabular::Tabular;
 
 pub mod helpers;
 
-struct OptSearch {
-    f: fn(&&Opt),
-}
-
-impl OptSearch {
-    fn new(f: fn(&&Opt)) -> OptSearch {
-        OptSearch { f }
-    }
-}
-
 #[derive(Debug)]
 pub struct Opt {
     name: String,
