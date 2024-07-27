@@ -4,6 +4,16 @@ use tabular::Tabular;
 
 pub mod helpers;
 
+struct OptSearch {
+    f: fn(&&Opt),
+}
+
+impl OptSearch {
+    fn new(f: fn(&&Opt)) -> OptSearch {
+        OptSearch { f }
+    }
+}
+
 #[derive(Debug)]
 pub struct Opt {
     name: String,
@@ -78,10 +88,7 @@ impl Command {
     pub fn new(name: &str) -> Command {
         let mut subcommands: HashMap<String, Command> = HashMap::new();
         if !name.eq("help") {
-            subcommands.insert(
-                String::from("help"),
-                Command::new("help").description("Display help for any command"),
-            );
+            subcommands.insert(String::from("help"), Command::new("help"));
         }
 
         Command {
@@ -186,6 +193,16 @@ impl Command {
         println!("{} {}", env!("CARGO_PKG_NAME"), self.version);
     }
 
+    fn handle_default_flags(&self, opt_name: String) {
+        if opt_name.eq("help") {
+            self.display_help();
+            process::exit(0);
+        } else if opt_name.eq("version") {
+            self.display_version();
+            process::exit(0);
+        }
+    }
+
     fn parse(mut self) -> Command {
         let mut expecting_opt: Option<&Opt> = None;
         for arg in std::env::args().collect::<Vec<String>>().drain(1..) {
@@ -213,63 +230,39 @@ impl Command {
                 continue;
             }
 
-            if arg.starts_with("--") {
-                let (opt_name, opt_value) = parse_opt(arg);
-                if let Some(long_opt) = self.options.iter().find(|opt| opt.long == opt_name) {
-                    if long_opt.name.eq("help") {
-                        self.display_help();
-                        process::exit(0);
-                    } else if long_opt.name.eq("version") {
-                        self.display_version();
-                        process::exit(0);
-                    }
+            // Find option by either short name or long name depending on
+            // option type
+            let (opt_name, opt_value) = parse_opt(&arg);
+            let mut predicate: Box<dyn Fn(&&Opt) -> bool> =
+                Box::new(|opt: &&Opt| opt.long == opt_name);
+            if arg.starts_with('-') {
+                predicate = Box::new(|opt: &&Opt| opt.short == opt_name.chars().next().unwrap());
+            }
 
-                    if long_opt.expects_value && opt_value.is_empty() {
-                        expecting_opt = Some(long_opt);
-                    } else if !long_opt.expects_value && !opt_value.is_empty() {
-                        error(ErrorType::UnexpectedValue(&long_opt.name))
+            // Handle standalone long and short options
+            if arg.starts_with("--") || (arg.starts_with('-') && !opt_value.is_empty()) {
+                if let Some(opt) = self.options.iter().find(predicate) {
+                    self.handle_default_flags(opt.name.clone());
+                    if opt.expects_value && opt_value.is_empty() {
+                        expecting_opt = Some(opt);
+                    } else if !opt.expects_value && !opt_value.is_empty() {
+                        error(ErrorType::UnexpectedValue(&opt.name))
                     }
-                    // TODO: Can I avoid cloning here?
-                    self.matches.insert(long_opt.name.clone(), opt_value);
+                    self.matches.insert(opt.name.clone(), opt_value);
                 } else {
                     error(ErrorType::InvalidOption(&opt_name));
                 }
-            } else if arg.starts_with('-') {
-                let (opt_name, opt_value) = parse_opt(arg);
-                if !opt_value.is_empty() {
-                    if let Some(short_opt) = self
-                        .options
-                        .iter()
-                        .find(|opt| opt.short == opt_name.chars().next().unwrap())
-                    {
-                        if short_opt.expects_value && opt_value.is_empty() {
-                            expecting_opt = Some(short_opt);
-                        } else if !short_opt.expects_value && !opt_value.is_empty() {
-                            error(ErrorType::UnexpectedValue(&short_opt.name))
+            } else {
+                // Handle chained short options
+                for char in opt_name.chars() {
+                    if let Some(opt) = self.options.iter().find(|opt| opt.short == char) {
+                        self.handle_default_flags(opt.name.clone());
+                        if opt.expects_value {
+                            error(ErrorType::ExpectingValue(&opt.name))
                         }
-                        self.matches.insert(short_opt.name.clone(), opt_value);
+                        self.matches.insert(opt.name.clone(), String::new());
                     } else {
                         error(ErrorType::InvalidOption(&opt_name));
-                    }
-                } else {
-                    for char in opt_name.chars() {
-                        if let Some(short_opt) = self.options.iter().find(|opt| opt.short == char) {
-                            if short_opt.name.eq("help") {
-                                self.display_help();
-                                process::exit(0);
-                            } else if short_opt.name.eq("version") {
-                                self.display_version();
-                                process::exit(0);
-                            }
-
-                            if short_opt.expects_value {
-                                error(ErrorType::ShortExpectingValue(&short_opt.name))
-                            }
-
-                            self.matches.insert(short_opt.name.clone(), String::new());
-                        } else {
-                            error(ErrorType::InvalidOption(&char.to_string()));
-                        }
                     }
                 }
             }

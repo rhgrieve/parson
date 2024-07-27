@@ -1,6 +1,6 @@
 use std::process;
 
-pub fn parse_opt(opt: String) -> (String, String) {
+pub fn parse_opt(opt: &String) -> (String, String) {
     let raw_opt: Vec<&str> = opt.trim_matches('-').split('=').collect();
     let opt_name = raw_opt[0];
     let mut opt_value = "";
@@ -14,7 +14,6 @@ pub enum ErrorType<'a> {
     InvalidOption(&'a str),
     ExpectingValue(&'a str),
     UnexpectedValue(&'a str),
-    ShortExpectingValue(&'a str),
 }
 
 pub fn error(error: ErrorType) {
@@ -27,9 +26,6 @@ pub fn error(error: ErrorType) {
         }
         ErrorType::UnexpectedValue(s) => {
             eprintln!("Option `{s}` does not expect a value, but one was provided");
-        }
-        ErrorType::ShortExpectingValue(s) => {
-            eprintln!("Short option `{s}` expects a value and must be passed separately");
         }
     }
     process::exit(2)
